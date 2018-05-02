@@ -5,6 +5,7 @@
 from __future__ import division
 import numpy as np
 import pitasc_core.pitasc_logging as logging
+import math
 ##############################################################
 #TODO import for tf
 import rospy
@@ -39,13 +40,12 @@ class Controller_PPC(Controller):
     """
 
 
-    def __init__(self, rho_f, rho_y, rho_z, rho_o, rho_s, M_f, M_y, M_z, M_o, a_f, a_y, a_z, a_o, b):
+    def __init__(self, M_f=0, M_y=1, M_z=1, M_o=1, a_f=0.04, a_y=0.004, a_z=0.004, a_o=0.002, b=50):
         self.perf = {}
-        self.perf['rho_f'] = rho_f
-        self.perf['rho_y'] = rho_y
-        self.perf['rho_z'] = rho_z
-        self.perf['rho_o'] = rho_o
-        self.perf['rho_s'] = rho_s
+
+        # start time, (contact moment)  t-t_s in order to get time
+        self.perf['t_s'] = rospy.get_time()
+
         self.perf['M_f'] = M_f
         self.perf['M_y'] = M_y
         self.perf['M_z'] = M_z
@@ -62,6 +62,16 @@ class Controller_PPC(Controller):
 
 
     def calc_velocity(self, f_d, f_m, y_d, y_m):
+
+        # define time and performance
+        t = rospy.get_time() - self.perf['t_s']
+        self.perf['rho_f'] = 9
+        self.perf['rho_y'] = (0.02-0.01)*math.exp(-2*t)+0.01
+        self.perf['rho_z'] = (0.02-0.01)*math.exp(-2*t)+0.01
+        self.perf['rho_o'] = (0.02-0.01)*math.exp(-2*t)+0.01
+        #TODO rho_s
+        self.perf['rho_s'] = (0.02-0.01)*math.exp(-2*t)+0.01
+
 
         #TODO tf listener
         t = tf.Transformer(True, rospy.Duration(10.0))
