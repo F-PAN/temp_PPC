@@ -34,7 +34,7 @@ class Controller_PPC(Controller):
 
         rho_f, rho_y, rho_z, rho_o, rho_s
 
-        f, f_d,
+        f, f_d
         R_s, R_t, R_d
         P_s, P_t, P_d
     """
@@ -44,7 +44,7 @@ class Controller_PPC(Controller):
         self.perf = {}
 
         # start time, (contact moment)  t-t_s in order to get time
-        self.perf['t_s'] = rospy.get_time()
+
 
         self.perf['M_f'] = M_f
         self.perf['M_y'] = M_y
@@ -52,6 +52,7 @@ class Controller_PPC(Controller):
         self.perf['M_o'] = M_o
 
         self.params = {}
+        self.params['t_s'] = rospy.get_time()
         self.params['a_f'] = a_f
         self.params['a_y'] = a_y
         self.params['a_z'] = a_z
@@ -61,25 +62,84 @@ class Controller_PPC(Controller):
         self.signals = {}
 
 
-    def calc_velocity(self, f_d, f_m, y_d, y_m):
+    def calc_velocity(self, f_d=10, f_m, y_d, y_m):
 
         # define time and performance
-        t = rospy.get_time() - self.perf['t_s']
-        self.perf['rho_f'] = 9
-        self.perf['rho_y'] = (0.02-0.01)*math.exp(-2*t)+0.01
-        self.perf['rho_z'] = (0.02-0.01)*math.exp(-2*t)+0.01
-        self.perf['rho_o'] = (0.02-0.01)*math.exp(-2*t)+0.01
+        t = rospy.get_time() - self.params['t_s']
+        rho_f = 9
+        rho_y = (0.02-0.01)*math.exp(-2*t)+0.01
+        rho_z = (0.02-0.01)*math.exp(-2*t)+0.01
+        rho_o = (0.02-0.01)*math.exp(-2*t)+0.01
         #TODO rho_s
-        self.perf['rho_s'] = (0.02-0.01)*math.exp(-2*t)+0.01
+        rho_s = (0.02-0.01)*math.exp(-2*t)+0.01
 
 
         #TODO tf listener
         t = tf.Transformer(True, rospy.Duration(10.0))
         t.getFrameStrings()
-        (self.signals['P_t'],self.signals['Rot_t']) = t.lookupTransform('tool0','base',rospy.Time(0))
-        (self.signals['P_s'],self.signals['Rot_s']) = t.lookupTransform('start_position','tool0',rospy.Time(0))
+        (P_t, Rot_t) = t.lookupTransform('tool0','base',rospy.Time(0))
+        (P_s, Rot_s) = t.lookupTransform('start_position','tool0',rospy.Time(0))
         #TODO quaternions to matrices
-        self.signals['R_t'] = quaternions.quat2mat(self.signals['Rot_t'])
-        self.signals['R_s'] = quaternions.quat2mat(self.signals['Rot_s'])
+        R_t = quaternions.quat2mat(self.signals['Rot_t'])
+        R_s = quaternions.quat2mat(self.signals['Rot_s'])
         #TODO euler to matrices, y_d struktor
-        self.signals['R_d'] = euler.euler2mat(y_d[3],y_d[4],y_d[5])
+        #TODO
+        #TODO
+        #TODO
+
+
+
+        R_d = euler.euler2mat(y_d[3],y_d[4],y_d[5])
+        P_d = y_d
+
+
+
+
+
+
+
+
+
+        ########################################################################
+        ## Controller
+        # split rotation matrices
+        n_s, o_s, a_s = np.array_split(self.signals['R_s'],3,axis=1)
+        n_t, o_t, a_t = np.array_split(self.signals['R_t'],3,axis=1)
+        n_d, o_d, a_d = np.array_split(self.signals['R_d'],3,axis=1)
+
+        e_f = f - f_d
+        e_y = float(np.transpose(o_s).dot(P_t-P_d))
+        e_z = float(np.transpose(a_s).dot(P_t-P_d))
+        e_o = (np.cross(n_t,n_d,axis=0) + np.cross(o_t,o_d,axis=0) + np.cross(a_t,a_d,axis=0))/2
+        L = (skew(n_t).dot(skew(n_d)) + skew(o_t).dot(skew(o_d)) + skew(a_t).dot(skew(a_d)))/2
+
+        epsilon_f = T(e_f,rho_f,self.perf['M_f'])
+        epsilon_y = T(e_y,rho_y,self.perf['M_y'])
+        epsilon_z = T(e_z,rho_z,self.perf['M_z'])
+        epsilon_o = np.array([[T(e_o[0][0],rho_o[0][0],self.perf['M_o'])], [T(e_o[1][0],rho_o[1][0],self.perf['M_o'])], [T(e_o[2][0],rho_o[2][0],self.perf['M_o'])]])
+
+        Psi_f = Psi(e_f,rho_f,self.perf['M_f'])
+        Psi_y = Psi(e_y,rho_y,self.perf['M_y'])
+        Psi_z = Psi(e_z,rho_z,self.perf['M_z'])
+        Psi_o = np.diag((Psi(e_o[0][0],rho_o[0][0],self.perf['M_o']),Psi(e_o[1][0],rho_o[1][0],self.perf['M_o']),Psi(e_o[2][0],rho_o[2][0],self.perf['M_o'])))
+
+
+
+        return
+    #########################################################################################################
+    def skew(v):
+        return np.array([0,-v[2][0],v[1][0],v[2][0],0,-v[0][0],-v[1][0],v[0][0],0]).reshape(3,3)
+
+    def T(e,rho,M):
+        a = e/rho
+        if e >= 0:
+            return float(np.log((M+a)/(1-a)))
+        else:    #e<=0?
+            return float(np.log((1+a)/(M-a)))
+
+    def Psi(e,rho,M):
+        a = e/rho
+        if e >= 0:
+            return float(((1/(M+a)+1/(1-a))/rho))
+        else:    #e<=0?
+            return float(((1/(1+a)+1/(M-a))/rho))
