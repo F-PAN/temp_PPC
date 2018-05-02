@@ -30,7 +30,7 @@ class Controller_PPC(Controller):
         Parameters:
         M_f, M_y, M_z, M_o
         a_f, a_y, a_z, a_o
-        b
+        b,
 
         rho_f, rho_y, rho_z, rho_o, rho_s
 
