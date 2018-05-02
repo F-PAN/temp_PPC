@@ -33,7 +33,7 @@ class Controller_PPC(Controller):
 
         rho_f, rho_y, rho_z, rho_o, rho_s
 
-        f, f_d
+        f, f_d,
         R_s, R_t, R_d
         P_s, P_t, P_d
     """
