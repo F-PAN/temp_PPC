@@ -62,7 +62,7 @@ class Controller_PPC(Controller):
         self.signals = {}
 
 
-    def calc_velocity(self, f_d=10, f_m, y_d, y_m):
+    def calc_velocity(self, f_d=10, f_m, y_d, y_m, V_m): # reference force, pos and orien.; measured force, pos and orien., velocity
 
         # define time and performance
         t = rospy.get_time() - self.params['t_s']
@@ -77,14 +77,16 @@ class Controller_PPC(Controller):
         #TODO tf listener
         t = tf.Transformer(True, rospy.Duration(10.0))
         t.getFrameStrings()
-        (P_t, Rot_t) = t.lookupTransform('tool0','base',rospy.Time(0))
-        (P_s, Rot_s) = t.lookupTransform('start_position','tool0',rospy.Time(0))
+        (P_t, Rot_t) = t.lookupTransform('tool','base',rospy.Time(0))
+        (P_s, Rot_s) = t.lookupTransform('start_position','tool',rospy.Time(0))
         #TODO quaternions to matrices
         R_t = quaternions.quat2mat(self.signals['Rot_t'])
         R_s = quaternions.quat2mat(self.signals['Rot_s'])
         #TODO euler to matrices, y_d struktor
         R_d = euler.euler2mat(y_d[3],y_d[4],y_d[5])
         P_d = np.array([y_d[0]],[y_d[1]],[y_d[2])
+
+
 
 
 
@@ -125,7 +127,10 @@ class Controller_PPC(Controller):
         Vr2 = -a_o * np.linalg.inv(L).dot(Psi_o).dot(epsilon_o)
         Vr = np.concatenate((Vr1, Vr2), axis=0)
 
-        # reference velocity in base frame (do we need this ?)
+        # reference velocity in base frame
+        V_d = np.linalg.inv(R_t).dot(np.linalg.inv(R_s)).dot(Vr)
+
+        #
 
         return
     #########################################################################################################
