@@ -77,23 +77,17 @@ class Controller_PPC(Controller):
         #TODO tf listener
         t = tf.Transformer(True, rospy.Duration(10.0))
         t.getFrameStrings()
-        (P_t, Rot_t) = t.lookupTransform('tool','base',rospy.Time(0))
-        (P_s, Rot_s) = t.lookupTransform('start_position','tool',rospy.Time(0))
+        (P_t, Rot_t) = t.lookupTransform('tool0','base',rospy.Time(0))
+        (P_s, Rot_s) = t.lookupTransform('start_position','tool0',rospy.Time(0))
         #TODO quaternions to matrices
         R_t = quaternions.quat2mat(self.signals['Rot_t'])
         R_s = quaternions.quat2mat(self.signals['Rot_s'])
         #TODO euler to matrices, y_d struktor
+
+        # R_d = R_s.dot(R_t)
+        # P_d = P_s
         R_d = euler.euler2mat(y_d[3],y_d[4],y_d[5])
         P_d = np.array([y_d[0]],[y_d[1]],[y_d[2])
-
-
-
-
-
-
-
-
-
 
 
         ########################################################################
@@ -132,7 +126,7 @@ class Controller_PPC(Controller):
 
         #
 
-        return
+        return V_d
     #########################################################################################################
     # tranform vector to skew symmetric matrix
     def skew(v):
