@@ -83,14 +83,8 @@ class Controller_PPC(Controller):
         R_t = quaternions.quat2mat(self.signals['Rot_t'])
         R_s = quaternions.quat2mat(self.signals['Rot_s'])
         #TODO euler to matrices, y_d struktor
-        #TODO
-        #TODO
-        #TODO
-
-
-
         R_d = euler.euler2mat(y_d[3],y_d[4],y_d[5])
-        P_d = y_d
+        P_d = np.array([y_d[0]],[y_d[1]],[y_d[2])
 
 
 
@@ -107,29 +101,39 @@ class Controller_PPC(Controller):
         n_t, o_t, a_t = np.array_split(self.signals['R_t'],3,axis=1)
         n_d, o_d, a_d = np.array_split(self.signals['R_d'],3,axis=1)
 
+        # control error
         e_f = f - f_d
         e_y = float(np.transpose(o_s).dot(P_t-P_d))
         e_z = float(np.transpose(a_s).dot(P_t-P_d))
         e_o = (np.cross(n_t,n_d,axis=0) + np.cross(o_t,o_d,axis=0) + np.cross(a_t,a_d,axis=0))/2
         L = (skew(n_t).dot(skew(n_d)) + skew(o_t).dot(skew(o_d)) + skew(a_t).dot(skew(a_d)))/2
 
+        # error transformation
         epsilon_f = T(e_f,rho_f,self.perf['M_f'])
         epsilon_y = T(e_y,rho_y,self.perf['M_y'])
         epsilon_z = T(e_z,rho_z,self.perf['M_z'])
         epsilon_o = np.array([[T(e_o[0][0],rho_o[0][0],self.perf['M_o'])], [T(e_o[1][0],rho_o[1][0],self.perf['M_o'])], [T(e_o[2][0],rho_o[2][0],self.perf['M_o'])]])
 
+        # derivative of error transformation
         Psi_f = Psi(e_f,rho_f,self.perf['M_f'])
         Psi_y = Psi(e_y,rho_y,self.perf['M_y'])
         Psi_z = Psi(e_z,rho_z,self.perf['M_z'])
         Psi_o = np.diag((Psi(e_o[0][0],rho_o[0][0],self.perf['M_o']),Psi(e_o[1][0],rho_o[1][0],self.perf['M_o']),Psi(e_o[2][0],rho_o[2][0],self.perf['M_o'])))
 
+        # reference velocity in surface frame
+        Vr1 = np.array([[-a_f*Psi_f*epsilon_f], [-a_y*Psi_y*epsilon_y],[-a_z*Psi_z*epsilon_z]])
+        Vr2 = -a_o * np.linalg.inv(L).dot(Psi_o).dot(epsilon_o)
+        Vr = np.concatenate((Vr1, Vr2), axis=0)
 
+        # reference velocity in base frame (do we need this ?)
 
         return
     #########################################################################################################
+    # tranform vector to skew symmetric matrix
     def skew(v):
         return np.array([0,-v[2][0],v[1][0],v[2][0],0,-v[0][0],-v[1][0],v[0][0],0]).reshape(3,3)
 
+    # error transformation
     def T(e,rho,M):
         a = e/rho
         if e >= 0:
@@ -137,6 +141,7 @@ class Controller_PPC(Controller):
         else:    #e<=0?
             return float(np.log((1+a)/(M-a)))
 
+    # derivative of error transformation
     def Psi(e,rho,M):
         a = e/rho
         if e >= 0:
