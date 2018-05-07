@@ -7,15 +7,15 @@ import numpy as np
 import pitasc_core.pitasc_logging as logging
 import math
 ##############################################################
-#TODO import for tf
+## TODO import rospy for tf ##
+##
 import rospy
 import tf
 
 ##############################################################
-#TODO quaternions to matrices
-from transforms3d import quaternions
-from transforms3d import euler
-
+## TODO quaternions to matrices ##
+##
+from tf.transformations import quaternion_matrix, euler_matrix
 
 
 
@@ -45,7 +45,6 @@ class Controller_PPC(Controller):
 
         # start time, (contact moment)  t-t_s in order to get time
 
-
         self.perf['M_f'] = M_f
         self.perf['M_y'] = M_y
         self.perf['M_z'] = M_z
@@ -62,7 +61,7 @@ class Controller_PPC(Controller):
         self.signals = {}
 
 
-    def calc_velocity(self, f_d=10, f_m, y_d, y_m, V_m): # reference force, pos and orien.; measured force, pos and orien., velocity
+    def calc_velocity(self, f_d=10, f_m): # reference force, pos and orien.; measured force, pos and orien., velocity
 
         # define time and performance
         t = rospy.get_time() - self.params['t_s']
@@ -73,21 +72,22 @@ class Controller_PPC(Controller):
         #TODO rho_s
         rho_s = (0.02-0.01)*math.exp(-2*t)+0.01
 
+        # EE-frame (inertial frame)
+        P_t = np.array([[0], [0], [0]])
+        R_t = np.array([[1,0,0],[0,1,0],[0,0,1]])
 
-        #TODO tf listener
-        t = tf.Transformer(True, rospy.Duration(10.0))
+
+        # Surface frame from tf listener
+        t = tf.Transformer(True, rospy.Duration(40.0))
         t.getFrameStrings()
-        (P_t, Rot_t) = t.lookupTransform('tool0','base',rospy.Time(0))
         (P_s, Rot_s) = t.lookupTransform('start_position','tool0',rospy.Time(0))
         #TODO quaternions to matrices
-        R_t = quaternions.quat2mat(self.signals['Rot_t'])
-        R_s = quaternions.quat2mat(self.signals['Rot_s'])
-        #TODO euler to matrices, y_d struktor
+        R_s = quaternion_matrix(self.signals['Rot_s'])
 
-        # R_d = R_s.dot(R_t)
-        # P_d = P_s
-        R_d = euler.euler2mat(y_d[3],y_d[4],y_d[5])
-        P_d = np.array([y_d[0]],[y_d[1]],[y_d[2])
+        #TODO euler to matrices, y_d struktor
+        R_d = R_s
+        P_d = P_s
+
 
 
         ########################################################################
@@ -108,13 +108,13 @@ class Controller_PPC(Controller):
         epsilon_f = T(e_f,rho_f,self.perf['M_f'])
         epsilon_y = T(e_y,rho_y,self.perf['M_y'])
         epsilon_z = T(e_z,rho_z,self.perf['M_z'])
-        epsilon_o = np.array([[T(e_o[0][0],rho_o[0][0],self.perf['M_o'])], [T(e_o[1][0],rho_o[1][0],self.perf['M_o'])], [T(e_o[2][0],rho_o[2][0],self.perf['M_o'])]])
+        epsilon_o = np.array([[T(e_o[0][0],rho_o,self.perf['M_o'])], [T(e_o[1][0],rho_o,self.perf['M_o'])], [T(e_o[2][0],rho_o,self.perf['M_o'])]])
 
         # derivative of error transformation
         Psi_f = Psi(e_f,rho_f,self.perf['M_f'])
         Psi_y = Psi(e_y,rho_y,self.perf['M_y'])
         Psi_z = Psi(e_z,rho_z,self.perf['M_z'])
-        Psi_o = np.diag((Psi(e_o[0][0],rho_o[0][0],self.perf['M_o']),Psi(e_o[1][0],rho_o[1][0],self.perf['M_o']),Psi(e_o[2][0],rho_o[2][0],self.perf['M_o'])))
+        Psi_o = np.diag((Psi(e_o[0][0],rho_o,self.perf['M_o']),Psi(e_o[1][0],rho_o,self.perf['M_o']),Psi(e_o[2][0],rho_o,self.perf['M_o'])))
 
         # reference velocity in surface frame
         Vr1 = np.array([[-a_f*Psi_f*epsilon_f], [-a_y*Psi_y*epsilon_y],[-a_z*Psi_z*epsilon_z]])
